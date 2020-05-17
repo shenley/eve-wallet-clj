@@ -15,7 +15,9 @@
             [taoensso.timbre :as log]
             [java-time :as jt]))
 
-;; # Authentication (defprotocol)
+;; # Eve SSO handling
+;; 
+;; ## Authentication (defprotocol)
 ;; 
 ;; This protocol defines the "public interface" for the ESI auth component. 
 ;; Exposes functionality to set and refresh access token and fetch character id.
@@ -24,8 +26,11 @@
   (refresh-access-token [this])
   (get-char-id          [this]))
 
+;; ## OAUTH Token handling
+;; These functions handling making the access token and refresh token requests
 (defn oauth-token
-  "Call the oauth access token"
+  "Call the oauth access token endpoint, providing either an auth code or a 
+   refresh token"
   [client secret body]
   (-> (http/post "https://login.eveonline.com/oauth/token"
                  {:basic-auth [client secret]
@@ -39,6 +44,7 @@
       (assoc :timestamp (jt/instant))))
 
 (defn- oauth-access-token
+  "Fetch an oauth token from an auth code"
   [client secret auth-code]
   (->> {:grant_type :authorization_code
         :code       auth-code}
@@ -46,13 +52,19 @@
        (oauth-token client secret)))
 
 (defn- oauth-refresh-token
+  "Fetch an oauth token from a refresh token"
   [client secret refresh-token]
   (->> {:grant_type :refresh_token
         :refresh_token refresh-token}
        (json/generate-string)
        (oauth-token client secret)))
 
+;; ## OAUTH Hanbdler
+;; This function is the web handler for the Eve SSO callback. It uses the 
+;; provided auth code to request an acces token.
 (defn- oauth-handler
+  "Ring handler for oauth callback. Use provided auth code to get an 
+   access/refresh token for further use."
   [request]
   (let [auth                    (:auth request)
         auth-code               (get-in request [:query-params "code"])
@@ -66,16 +78,15 @@
   (route/not-found "Route not found"))
 
 (defn- wrap-auth-request
+  "Simple ring wrapper to inject auth component into request object"
   [handler auth]
   (fn [req]
     (handler (assoc req :auth auth))))
 
-;; Auth component
-;; hold state for callback http server, and current token to pull data
-
+;; ## Auth component
+;; hold state for callback http server, and current token to pull data\
 (defrecord EsiAuth
            [config server token]
-
   component/Lifecycle
   (start [this]
     (if-not server
@@ -100,33 +111,33 @@
         (assoc this :server nil))
       (log/warn "Immutant callback server not running"))
     (reset! token {}))
-  
+
   EsiAuthProto
   (update-access-token [_ new-token]
     (swap! token merge new-token))
-  
+
   (refresh-access-token [_]
     (let [{:keys [client secret]} config]
       (-> (:refresh_token @token)
           (oauth-refresh-token client secret)
           (swap! token merge (oauth-refresh-token client secret)))
       true))
-  
+
   (get-char-id [this]
     @token))
 
 (defn auth-request
-  "Opens a browser window with an oath login, our server should pick up the redirect with the user's code"
+  "returns URL to give to user to perform SSO login, our server should pick 
+   up the redirect/callback with the user's auth code"
   [auth state]
-  (let [{:keys [scopes client redirect-url]} (:config auth)
-        url (str "https://login.eveonline.com/oauth/authorize"
-                 "?response_type=code"
-                 "&redirect_uri=" redirect-url
-                 "&client_id=" client
-                 "&scope=" scopes
-                 (when state
-                   (str "&state=" state)))]
-    url))
+  (let [{:keys [scopes client redirect-url]} (:config auth)]
+    (str "https://login.eveonline.com/oauth/authorize"
+         "?response_type=code"
+         "&redirect_uri=" redirect-url
+         "&client_id=" client
+         "&scope=" scopes
+         (when state
+           (str "&state=" state)))))
 
 (defn default-config
   []
