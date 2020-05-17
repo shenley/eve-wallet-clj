@@ -20,8 +20,11 @@
    [clojure.tools.namespace.repl :refer [refresh refresh-all clear]]
    [com.stuartsierra.component :as component]
    [com.stuartsierra.component.repl :refer [reset set-init start stop system]]
+   [clj-http.client :as http]
    [nancy.crow.eve-wallet.esi :as esi]
-   [nancy.crow.eve-wallet :as eve-wallet]))
+   [nancy.crow.eve-wallet :as eve-wallet]
+   [immutant.web :as web]
+   [taoensso.timbre :as log]))
 
 ;; Do not try to load source code from 'resources' directory
 (clojure.tools.namespace.repl/set-refresh-dirs "dev" "src" "test")
@@ -29,13 +32,13 @@
 (defn dev-system
   "Constructs a system map suitable for interactive development."
   []
-  (component/system-map
-   :esi-auth (esi/create-auth)
-   
-   ;; TODO
-   ))
+  (let [[client secret] (-> (slurp "client.txt")
+                               (string/split #"\n"))]
+    (component/system-map
+     :esi-auth (esi/create-auth (assoc (esi/default-config)
+                                       :client client
+                                       :secret secret)))))
 
 (set-init (fn [_] (dev-system)))
 
 
-()

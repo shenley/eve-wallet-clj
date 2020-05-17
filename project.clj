@@ -4,13 +4,15 @@
   :license {:name "MIT"
             :url "https://opensource.org/licenses/MIT"}
   :dependencies [[org.clojure/clojure "1.10.1"]
-                 [com.stuartsierra/component "0.3.2"]
+                 [com.stuartsierra/component "1.0.0"]
                  [clj-http "3.10.1"]
                  [org.immutant/web "2.1.7"]
                  [ring/ring-core "1.8.1"]
                  [ring/ring-json "0.5.0"]
                  [compojure "1.6.1"]
-                 [com.taoensso/timbre "4.10.0"]]
+                 [com.taoensso/timbre "4.10.0"]
+                 [cheshire "5.10.0"]
+                 [clojure.java-time "0.3.2"]]
   :profiles {:dev {:dependencies [[org.clojure/tools.namespace "0.2.11"]
                                   [com.stuartsierra/component.repl "0.2.0"]]
                    :source-paths ["dev"]}})
